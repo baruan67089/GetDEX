@@ -292,3 +292,150 @@ contract GetDEX {
         out1 = (shareAmt * p.reserve1) / p.totalShares;
         if (out0 < amt0Min || out1 < amt1Min) revert GDX_Slippage();
         lpShares[poolId][msg.sender] = held - shareAmt;
+        p.totalShares -= shareAmt;
+        p.reserve0 -= out0;
+        p.reserve1 -= out1;
+        _pushToken(p.token0, msg.sender, out0);
+        _pushToken(p.token1, msg.sender, out1);
+        emit GDX_LiquidityBurned(poolId, msg.sender, out0, out1, shareAmt);
+    }
+
+    function swapExactIn(
+        uint256 poolId,
+        address tokenIn,
+        uint256 amtIn,
+        uint256 amtOutMin,
+        uint256 deadline
+    ) external whenLive nonReentrant returns (uint256 amtOut) {
+        if (block.timestamp > deadline) revert GDX_Expiry();
+        if (amtIn == 0) revert GDX_ZeroAmt();
+        LiquidityPool storage p = pools[poolId];
+        if (p.poolId == 0) revert GDX_PoolMissing();
+        if (!p.live) revert GDX_PoolOff();
+        bool zeroForOne = tokenIn == p.token0;
+        if (!zeroForOne && tokenIn != p.token1) revert GDX_BadPath();
+        (uint256 rIn, uint256 rOut) = zeroForOne ? (p.reserve0, p.reserve1) : (p.reserve1, p.reserve0);
+        amtOut = GdxMath.quoteOut(rIn, rOut, amtIn, p.swapFeeBps);
+        if (amtOut < amtOutMin) revert GDX_Slippage();
+        if (amtOut == 0 || amtOut >= rOut) revert GDX_ReserveDry();
+        _pullToken(tokenIn, msg.sender, amtIn);
+        if (zeroForOne) {
+            p.reserve0 = GdxMath.safeAdd(p.reserve0, amtIn);
+            p.reserve1 -= amtOut;
+            _pushToken(p.token1, msg.sender, amtOut);
+        } else {
+            p.reserve1 = GdxMath.safeAdd(p.reserve1, amtIn);
+            p.reserve0 -= amtOut;
+            _pushToken(p.token0, msg.sender, amtOut);
+        }
+        emit GDX_SwapExecuted(poolId, msg.sender, tokenIn, amtIn, amtOut);
+    }
+
+    function skimProtocol(uint256 poolId, address token) external onlyPitMaster nonReentrant {
+        LiquidityPool storage p = pools[poolId];
+        if (p.poolId == 0) revert GDX_PoolMissing();
+        if (protocolFeeBps == 0) revert GDX_ZeroAmt();
+        uint256 bal = IERC20Gdx(token).balanceOf(address(this));
+        uint256 tracked = token == p.token0 ? p.reserve0 : token == p.token1 ? p.reserve1 : 0;
+        if (tracked == 0 && token != p.token0 && token != p.token1) revert GDX_BadPath();
+        if (bal <= tracked) revert GDX_ZeroAmt();
+        uint256 surplus = bal - tracked;
+        uint256 skim = GdxMath.mulBps(surplus, protocolFeeBps);
+        if (skim == 0) revert GDX_ZeroAmt();
+        _pushToken(token, pitMaster, skim);
+        emit GDX_ProtocolSkim(poolId, token, skim, uint64(block.timestamp));
+    }
+
+    function _calcDeposit(LiquidityPool storage p, uint256 amt0, uint256 amt1)
+        private
+        view
+        returns (uint256 use0, uint256 use1)
+    {
+        if (p.totalShares == 0) {
+            return (amt0, amt1);
+        }
+        if (amt0 > 0) {
+            use1 = (amt0 * p.reserve1) / p.reserve0;
+            if (use1 <= amt1) return (amt0, use1);
+        }
+        use0 = (amt1 * p.reserve0) / p.reserve1;
+        use1 = amt1;
+    }
+
+    function _mintShares(LiquidityPool storage p, uint256 use0, uint256 use1) private returns (uint256 shares) {
+        if (p.totalShares == 0) {
+            shares = _sqrt(use0 * use1);
+            if (shares < GDX_MIN_LIQ) revert GDX_LiqLow();
+        } else {
+            uint256 s0 = (use0 * p.totalShares) / p.reserve0;
+            uint256 s1 = (use1 * p.totalShares) / p.reserve1;
+            shares = s0 < s1 ? s0 : s1;
+            if (shares == 0) revert GDX_LiqLow();
+        }
+        p.totalShares = GdxMath.safeAdd(p.totalShares, shares);
+    }
+
+    function _sqrt(uint256 x) private pure returns (uint256 z) {
+        if (x == 0) return 0;
+        z = (x + 1) / 2;
+        uint256 y = x;
+        while (z < y) {
+            y = z;
+            z = (x / z + z) / 2;
+        }
+        return y;
+    }
+
+    function _pullToken(address token, address from, uint256 amt) private {
+        if (amt == 0) return;
+        if (!tokenListed[token]) revert GDX_TokenBlocked();
+        bool ok = IERC20Gdx(token).transferFrom(from, address(this), amt);
+        if (!ok) revert GDX_TransferFail();
+    }
+
+    function _pushToken(address token, address to, uint256 amt) private {
+        if (amt == 0) return;
+        bool ok = IERC20Gdx(token).transfer(to, amt);
+        if (!ok) revert GDX_TransferFail();
+    }
+
+    function poolDigest(uint256 poolId) external view returns (bytes32) {
+        LiquidityPool storage p = pools[poolId];
+        bytes32 hA = keccak256(abi.encode(p.token0, p.token1, p.reserve0, p.reserve1));
+        bytes32 hB = keccak256(abi.encode(p.totalShares, p.swapFeeBps, p.live, GDX_DOMAIN_TAG));
+        return keccak256(abi.encodePacked(hA, hB));
+    }
+
+    function seatDigest() external view returns (bytes32) {
+        bytes32 hA = keccak256(abi.encode(ADDRESS_A, ADDRESS_B, spawnedAt));
+        bytes32 hB = keccak256(abi.encode(ADDRESS_C, poolSerial, protocolFeeBps));
+        return keccak256(abi.encodePacked(hA, hB));
+    }
+
+    function poolCount() external view returns (uint256) {
+        return _poolIds.length;
+    }
+
+    function poolAt(uint256 index) external view returns (uint256 poolId) {
+        return _poolIds[index];
+    }
+
+    function providerPoolAt(address provider, uint256 index) external view returns (uint256 poolId) {
+        return _providerPools[provider][index];
+    }
+
+    function quoteExactIn(uint256 poolId, address tokenIn, uint256 amtIn) external view returns (uint256 amtOut) {
+        LiquidityPool storage p = pools[poolId];
+        if (p.poolId == 0) revert GDX_PoolMissing();
+        bool z = tokenIn == p.token0;
+        if (!z && tokenIn != p.token1) revert GDX_BadPath();
+        (uint256 rIn, uint256 rOut) = z ? (p.reserve0, p.reserve1) : (p.reserve1, p.reserve0);
+        return GdxMath.quoteOut(rIn, rOut, amtIn, p.swapFeeBps);
+    }
+
+    function quoteExactOut(uint256 poolId, address tokenOut, uint256 amtOut) external view returns (uint256 amtIn) {
+        LiquidityPool storage p = pools[poolId];
+        if (p.poolId == 0) revert GDX_PoolMissing();
+        bool z = tokenOut == p.token1;
+        if (!z && tokenOut != p.token0) revert GDX_BadPath();
+        (uint256 rIn, uint256 rOut) = z ? (p.reserve0, p.reserve1) : (p.reserve1, p.reserve0);
