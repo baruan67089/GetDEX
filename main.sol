@@ -439,3 +439,150 @@ contract GetDEX {
         bool z = tokenOut == p.token1;
         if (!z && tokenOut != p.token0) revert GDX_BadPath();
         (uint256 rIn, uint256 rOut) = z ? (p.reserve0, p.reserve1) : (p.reserve1, p.reserve0);
+        return GdxMath.quoteIn(rIn, rOut, amtOut, p.swapFeeBps);
+    }
+
+    function _bootPool_1() private {
+        poolSerial = 1;
+        LiquidityPool storage p = pools[1];
+        p.poolId = 1;
+        p.token0 = 0x082db679d9433EF8AEFc2f7063fFed1B4ccEcA2C;
+        p.token1 = 0xF59450C8AEEf3294d686ef3b3Fc6B1f9cD8269e5;
+        p.swapFeeBps = 73;
+        p.capWei = 32.2 ether;
+        p.openedAt = spawnedAt;
+        p.live = true;
+        pairIndex[keccak256(abi.encodePacked(0x082db679d9433EF8AEFc2f7063fFed1B4ccEcA2C, 0xF59450C8AEEf3294d686ef3b3Fc6B1f9cD8269e5))] = 1;
+        _poolIds.push(1);
+        tokenListed[0x082db679d9433EF8AEFc2f7063fFed1B4ccEcA2C] = true;
+        tokenListed[0xF59450C8AEEf3294d686ef3b3Fc6B1f9cD8269e5] = true;
+        emit GDX_PoolSpawned(1, 0x082db679d9433EF8AEFc2f7063fFed1B4ccEcA2C, 0xF59450C8AEEf3294d686ef3b3Fc6B1f9cD8269e5, 73);
+    }
+
+    function _bootPool_2() private {
+        poolSerial = 2;
+        LiquidityPool storage p = pools[2];
+        p.poolId = 2;
+        p.token0 = 0x9096A65e15aB220ed93C75130129e56D91ec3A00;
+        p.token1 = 0x94be3649a6A7Cd2d76aCD893c3939BF1f10c1a63;
+        p.swapFeeBps = 54;
+        p.capWei = 51.6 ether;
+        p.openedAt = spawnedAt;
+        p.live = true;
+        pairIndex[keccak256(abi.encodePacked(0x9096A65e15aB220ed93C75130129e56D91ec3A00, 0x94be3649a6A7Cd2d76aCD893c3939BF1f10c1a63))] = 2;
+        _poolIds.push(2);
+        tokenListed[0x9096A65e15aB220ed93C75130129e56D91ec3A00] = true;
+        tokenListed[0x94be3649a6A7Cd2d76aCD893c3939BF1f10c1a63] = true;
+        emit GDX_PoolSpawned(2, 0x9096A65e15aB220ed93C75130129e56D91ec3A00, 0x94be3649a6A7Cd2d76aCD893c3939BF1f10c1a63, 54);
+    }
+
+    function _bootPool_3() private {
+        poolSerial = 3;
+        LiquidityPool storage p = pools[3];
+        p.poolId = 3;
+        p.token0 = 0x30509a96251363A39C182e95983734ef1DCC476F;
+        p.token1 = 0x95E6FB603107F456cf87a55cA4cdB391959df63C;
+        p.swapFeeBps = 61;
+        p.capWei = 27.4 ether;
+        p.openedAt = spawnedAt;
+        p.live = true;
+        pairIndex[keccak256(abi.encodePacked(0x30509a96251363A39C182e95983734ef1DCC476F, 0x95E6FB603107F456cf87a55cA4cdB391959df63C))] = 3;
+        _poolIds.push(3);
+        tokenListed[0x30509a96251363A39C182e95983734ef1DCC476F] = true;
+        tokenListed[0x95E6FB603107F456cf87a55cA4cdB391959df63C] = true;
+        emit GDX_PoolSpawned(3, 0x30509a96251363A39C182e95983734ef1DCC476F, 0x95E6FB603107F456cf87a55cA4cdB391959df63C, 61);
+    }
+
+    function _bootPool_4() private {
+        poolSerial = 4;
+        LiquidityPool storage p = pools[4];
+        p.poolId = 4;
+        p.token0 = 0xB7EE3979e531816887a7c84a49a1C53e1be01C23;
+        p.token1 = 0xE71286b7E6eb0dae83293dF3035782c0F2B98734;
+        p.swapFeeBps = 72;
+        p.capWei = 41.5 ether;
+        p.openedAt = spawnedAt;
+        p.live = true;
+        pairIndex[keccak256(abi.encodePacked(0xB7EE3979e531816887a7c84a49a1C53e1be01C23, 0xE71286b7E6eb0dae83293dF3035782c0F2B98734))] = 4;
+        _poolIds.push(4);
+        tokenListed[0xB7EE3979e531816887a7c84a49a1C53e1be01C23] = true;
+        tokenListed[0xE71286b7E6eb0dae83293dF3035782c0F2B98734] = true;
+        emit GDX_PoolSpawned(4, 0xB7EE3979e531816887a7c84a49a1C53e1be01C23, 0xE71286b7E6eb0dae83293dF3035782c0F2B98734, 72);
+    }
+
+    function _bootPool_5() private {
+        poolSerial = 5;
+        LiquidityPool storage p = pools[5];
+        p.poolId = 5;
+        p.token0 = 0x7e4c6a1392dfEE7848668cE2Ec4AE0eCEe6EA1D0;
+        p.token1 = 0x7EB39905082Ed8F973F70E4e998E652281c630BB;
+        p.swapFeeBps = 55;
+        p.capWei = 52.8 ether;
+        p.openedAt = spawnedAt;
+        p.live = true;
+        pairIndex[keccak256(abi.encodePacked(0x7e4c6a1392dfEE7848668cE2Ec4AE0eCEe6EA1D0, 0x7EB39905082Ed8F973F70E4e998E652281c630BB))] = 5;
+        _poolIds.push(5);
+        tokenListed[0x7e4c6a1392dfEE7848668cE2Ec4AE0eCEe6EA1D0] = true;
+        tokenListed[0x7EB39905082Ed8F973F70E4e998E652281c630BB] = true;
+        emit GDX_PoolSpawned(5, 0x7e4c6a1392dfEE7848668cE2Ec4AE0eCEe6EA1D0, 0x7EB39905082Ed8F973F70E4e998E652281c630BB, 55);
+    }
+
+    function _bootPool_6() private {
+        poolSerial = 6;
+        LiquidityPool storage p = pools[6];
+        p.poolId = 6;
+        p.token0 = 0x570B5c77f14a78F59F278695e273d8a50240a302;
+        p.token1 = 0xFb830c8a8CE97e66fE18A0a6Cf05DE85B01C1e5E;
+        p.swapFeeBps = 65;
+        p.capWei = 24.2 ether;
+        p.openedAt = spawnedAt;
+        p.live = true;
+        pairIndex[keccak256(abi.encodePacked(0x570B5c77f14a78F59F278695e273d8a50240a302, 0xFb830c8a8CE97e66fE18A0a6Cf05DE85B01C1e5E))] = 6;
+        _poolIds.push(6);
+        tokenListed[0x570B5c77f14a78F59F278695e273d8a50240a302] = true;
+        tokenListed[0xFb830c8a8CE97e66fE18A0a6Cf05DE85B01C1e5E] = true;
+        emit GDX_PoolSpawned(6, 0x570B5c77f14a78F59F278695e273d8a50240a302, 0xFb830c8a8CE97e66fE18A0a6Cf05DE85B01C1e5E, 65);
+    }
+
+    function _bootPool_7() private {
+        poolSerial = 7;
+        LiquidityPool storage p = pools[7];
+        p.poolId = 7;
+        p.token0 = 0x5DbDE6e3191388C0b8523881f19672157216c6Ad;
+        p.token1 = 0xCEe4210914D3d8982664dbAeE540b050578f4e14;
+        p.swapFeeBps = 64;
+        p.capWei = 39.8 ether;
+        p.openedAt = spawnedAt;
+        p.live = true;
+        pairIndex[keccak256(abi.encodePacked(0x5DbDE6e3191388C0b8523881f19672157216c6Ad, 0xCEe4210914D3d8982664dbAeE540b050578f4e14))] = 7;
+        _poolIds.push(7);
+        tokenListed[0x5DbDE6e3191388C0b8523881f19672157216c6Ad] = true;
+        tokenListed[0xCEe4210914D3d8982664dbAeE540b050578f4e14] = true;
+        emit GDX_PoolSpawned(7, 0x5DbDE6e3191388C0b8523881f19672157216c6Ad, 0xCEe4210914D3d8982664dbAeE540b050578f4e14, 64);
+    }
+
+    function _bootPool_8() private {
+        poolSerial = 8;
+        LiquidityPool storage p = pools[8];
+        p.poolId = 8;
+        p.token0 = 0x6f7f2B750dA66E25B9EDdF74a22fF8409f18a376;
+        p.token1 = 0xDFe74a6cD59f012C2cfB4ecE5c36F22E334ab58F;
+        p.swapFeeBps = 71;
+        p.capWei = 71.8 ether;
+        p.openedAt = spawnedAt;
+        p.live = true;
+        pairIndex[keccak256(abi.encodePacked(0x6f7f2B750dA66E25B9EDdF74a22fF8409f18a376, 0xDFe74a6cD59f012C2cfB4ecE5c36F22E334ab58F))] = 8;
+        _poolIds.push(8);
+        tokenListed[0x6f7f2B750dA66E25B9EDdF74a22fF8409f18a376] = true;
+        tokenListed[0xDFe74a6cD59f012C2cfB4ecE5c36F22E334ab58F] = true;
+        emit GDX_PoolSpawned(8, 0x6f7f2B750dA66E25B9EDdF74a22fF8409f18a376, 0xDFe74a6cD59f012C2cfB4ecE5c36F22E334ab58F, 71);
+    }
+
+    function _bootPool_9() private {
+        poolSerial = 9;
+        LiquidityPool storage p = pools[9];
+        p.poolId = 9;
+        p.token0 = 0x0913b4C4b2F6E0eE7231699d3195d86EB3aa28ba;
+        p.token1 = 0x9EE54C4dF5Ad38C54f53c52d841Ef6EC8878F1DD;
+        p.swapFeeBps = 64;
+        p.capWei = 35.2 ether;
