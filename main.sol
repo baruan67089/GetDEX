@@ -145,3 +145,150 @@ contract GetDEX {
 
     mapping(uint256 => LiquidityPool) public pools;
     mapping(uint256 => mapping(address => uint256)) public lpShares;
+    mapping(bytes32 => uint256) public pairIndex;
+    mapping(address => bool) public tokenListed;
+    mapping(uint256 => int24) public tickSlot;
+    mapping(address => uint256[]) private _providerPools;
+    uint256[] private _poolIds;
+
+    modifier nonReentrant() {
+        if (_shutter == 2) revert GDX_Reentered();
+        _shutter = 2;
+        _;
+        _shutter = 1;
+    }
+
+    modifier onlyPitMaster() {
+        if (msg.sender != pitMaster) revert GDX_NotPitMaster();
+        _;
+    }
+
+    modifier whenLive() {
+        if (halted) revert GDX_Halted();
+        _;
+    }
+
+    constructor() {
+        pitMaster = msg.sender;
+        ADDRESS_A = 0x05937fCB3A183a97B6d8f93CaC3392E0fE8963DA;
+        ADDRESS_B = 0xb8960142670282cA826e2EA199A3BcA26a8c4199;
+        ADDRESS_C = 0x0B50ebe2C7B0502756676DbbD965Ae493763ABff;
+        spawnedAt = uint64(block.timestamp);
+        _shutter = 1;
+        protocolFeeBps = 8;
+        tokenListed[address(0)] = true;
+    }
+
+    function setHalted(bool flag) external onlyPitMaster {
+        halted = flag;
+        emit GDX_HaltSet(flag, uint64(block.timestamp));
+    }
+
+    function transferPit(address next) external onlyPitMaster {
+        if (next == address(0)) revert GDX_ZeroAddr();
+        if (next == pitMaster) revert GDX_SelfSeat();
+        address prev = pitMaster;
+        pitMaster = next;
+        emit GDX_PitTransferred(prev, next);
+    }
+
+    function setProtocolFee(uint256 bps) external onlyPitMaster {
+        if (bps > GDX_MAX_PROTOCOL_BPS) revert GDX_ProtoHigh();
+        protocolFeeBps = bps;
+    }
+
+    function listToken(address token, bool allowed) external onlyPitMaster {
+        if (token == address(0)) revert GDX_ZeroAddr();
+        tokenListed[token] = allowed;
+        emit GDX_TokenListed(token, allowed, uint64(block.timestamp));
+    }
+
+    function setPoolFee(uint256 poolId, uint256 swapFeeBps) external onlyPitMaster {
+        LiquidityPool storage p = pools[poolId];
+        if (p.poolId == 0) revert GDX_PoolMissing();
+        if (swapFeeBps > GDX_MAX_FEE_BPS) revert GDX_FeeHigh();
+        p.swapFeeBps = swapFeeBps;
+        emit GDX_FeeTuned(poolId, swapFeeBps, uint64(block.timestamp));
+    }
+
+    function togglePool(uint256 poolId, bool live) external onlyPitMaster {
+        LiquidityPool storage p = pools[poolId];
+        if (p.poolId == 0) revert GDX_PoolMissing();
+        p.live = live;
+    }
+
+    function postTick(uint256 slot, int24 tick) external onlyPitMaster {
+        tickSlot[slot] = tick;
+        emit GDX_TickPosted(slot, tick, uint64(block.timestamp));
+    }
+
+    function spawnPool(address token0, address token1, uint256 swapFeeBps, uint256 capWei)
+        external
+        onlyPitMaster
+        returns (uint256 poolId)
+    {
+        if (token0 == address(0) || token1 == address(0)) revert GDX_ZeroAddr();
+        if (token0 == token1) revert GDX_TokenDup();
+        if (!tokenListed[token0] || !tokenListed[token1]) revert GDX_TokenBlocked();
+        if (swapFeeBps > GDX_MAX_FEE_BPS) revert GDX_FeeHigh();
+        if (capWei < 5 ether) revert GDX_LiqLow();
+        if (token0 > token1) (token0, token1) = (token1, token0);
+        bytes32 key = keccak256(abi.encodePacked(token0, token1));
+        if (pairIndex[key] != 0) revert GDX_TokenDup();
+        poolId = ++poolSerial;
+        LiquidityPool storage p = pools[poolId];
+        p.poolId = poolId;
+        p.token0 = token0;
+        p.token1 = token1;
+        p.swapFeeBps = swapFeeBps;
+        p.capWei = capWei;
+        p.openedAt = uint64(block.timestamp);
+        p.live = true;
+        pairIndex[key] = poolId;
+        _poolIds.push(poolId);
+        emit GDX_PoolSpawned(poolId, token0, token1, swapFeeBps);
+    }
+
+    function addLiquidity(
+        uint256 poolId,
+        uint256 amt0Desired,
+        uint256 amt1Desired,
+        uint256 amt0Min,
+        uint256 amt1Min,
+        uint256 deadline
+    ) external whenLive nonReentrant returns (uint256 shares) {
+        if (block.timestamp > deadline) revert GDX_Expiry();
+        LiquidityPool storage p = pools[poolId];
+        if (p.poolId == 0) revert GDX_PoolMissing();
+        if (!p.live) revert GDX_PoolOff();
+        (uint256 use0, uint256 use1) = _calcDeposit(p, amt0Desired, amt1Desired);
+        if (use0 < amt0Min || use1 < amt1Min) revert GDX_Slippage();
+        if (use0 == 0 && use1 == 0) revert GDX_ZeroAmt();
+        _pullToken(p.token0, msg.sender, use0);
+        _pullToken(p.token1, msg.sender, use1);
+        shares = _mintShares(p, use0, use1);
+        p.reserve0 = GdxMath.safeAdd(p.reserve0, use0);
+        p.reserve1 = GdxMath.safeAdd(p.reserve1, use1);
+        if (p.reserve0 + p.reserve1 > p.capWei) revert GDX_CapHit();
+        lpShares[poolId][msg.sender] = GdxMath.safeAdd(lpShares[poolId][msg.sender], shares);
+        _providerPools[msg.sender].push(poolId);
+        emit GDX_LiquidityMinted(poolId, msg.sender, use0, use1, shares);
+    }
+
+    function removeLiquidity(
+        uint256 poolId,
+        uint256 shareAmt,
+        uint256 amt0Min,
+        uint256 amt1Min,
+        uint256 deadline
+    ) external whenLive nonReentrant returns (uint256 out0, uint256 out1) {
+        if (block.timestamp > deadline) revert GDX_Expiry();
+        if (shareAmt == 0) revert GDX_ZeroAmt();
+        LiquidityPool storage p = pools[poolId];
+        if (p.poolId == 0) revert GDX_PoolMissing();
+        uint256 held = lpShares[poolId][msg.sender];
+        if (held < shareAmt) revert GDX_ShareGone();
+        out0 = (shareAmt * p.reserve0) / p.totalShares;
+        out1 = (shareAmt * p.reserve1) / p.totalShares;
+        if (out0 < amt0Min || out1 < amt1Min) revert GDX_Slippage();
+        lpShares[poolId][msg.sender] = held - shareAmt;
